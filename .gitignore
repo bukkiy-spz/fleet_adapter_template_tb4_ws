@@ -1,0 +1,7 @@
+build/
+install/
+log/
+tmp/
+src/fleet_adapter_template/
+__pycache__/
+*.pyc
