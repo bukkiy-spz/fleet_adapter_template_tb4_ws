@@ -105,7 +105,7 @@ def main():
     )
     parser.add_argument(
         "--map-yaml",
-        default="/home/masu_ubu/rmf_main_ws/maps/tb4/tb4_map_20260518.yaml",
+        default="/home/masu_ubu/rmf_main_ws/maps/tb4/robot2_map_latest.yaml",
         help="Path to occupancy map yaml",
     )
     parser.add_argument(

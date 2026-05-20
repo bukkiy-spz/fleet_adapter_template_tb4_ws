@@ -17,6 +17,7 @@ import argparse
 import yaml
 import time
 import threading
+import math
 from datetime import timedelta
 
 import rclpy
@@ -47,6 +48,32 @@ except ModuleNotFoundError:
 
 
 def initialize_fleet(config_yaml, nav_graph_path, node, use_sim_time, server_uri):
+    def _wrap_to_pi(theta):
+        while theta > math.pi:
+            theta -= 2.0 * math.pi
+        while theta < -math.pi:
+            theta += 2.0 * math.pi
+        return theta
+
+    def _robot_pose_to_rmf(robot_pose, transforms):
+        x, y = transforms['robot_to_rmf'].transform([robot_pose[0], robot_pose[1]])
+        theta = math.radians(robot_pose[2]) - transforms['orientation_offset']
+        return [x, y, _wrap_to_pi(theta)]
+
+    def _nearest_graph_waypoint(nav_graph, rmf_position):
+        nearest_waypoint = None
+        nearest_distance = float("inf")
+        for waypoint_index in range(nav_graph.num_waypoints):
+            waypoint = nav_graph.get_waypoint(waypoint_index)
+            distance = math.hypot(
+                rmf_position[0] - waypoint.location[0],
+                rmf_position[1] - waypoint.location[1],
+            )
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest_waypoint = waypoint
+        return nearest_waypoint, nearest_distance
+
     # Profile and traits
     fleet_config = config_yaml['rmf_fleet']
     profile = traits.Profile(geometry.make_final_convex_circle(
@@ -237,6 +264,14 @@ def initialize_fleet(config_yaml, nav_graph_path, node, use_sim_time, server_uri
                     )
                     continue
                 if len(position) > 2:
+                    rmf_position = _robot_pose_to_rmf(position, transforms)
+                    node.get_logger().info(
+                        f"Live robot pose [{robot_name}] "
+                        f"robot_frame=({position[0]:.3f}, {position[1]:.3f}, "
+                        f"{position[2]:.2f} deg) "
+                        f"rmf_frame=({rmf_position[0]:.3f}, {rmf_position[1]:.3f}, "
+                        f"{rmf_position[2]:.2f} rad)"
+                    )
                     node.get_logger().info(f"Initializing robot: {robot_name}")
                     robots_config = config_yaml['robots'][robot_name]
                     rmf_config = robots_config['rmf_config']
@@ -247,28 +282,82 @@ def initialize_fleet(config_yaml, nav_graph_path, node, use_sim_time, server_uri
                     starts = []
                     time_now = adapter.now()
 
-                    if (initial_waypoint is not None) and\
-                            (initial_orientation is not None):
+                    use_configured_start = (
+                        initial_waypoint is not None and initial_orientation is not None
+                    )
+
+                    if use_configured_start:
+                        waypoint = nav_graph.find_waypoint(initial_waypoint)
+                        if waypoint is None:
+                            node.get_logger().warn(
+                                f"Configured initial waypoint [{initial_waypoint}] "
+                                f"does not exist for robot [{robot_name}]. "
+                                "Falling back to the live pose."
+                            )
+                            use_configured_start = False
+                        else:
+                            distance_to_waypoint = math.hypot(
+                                rmf_position[0] - waypoint.location[0],
+                                rmf_position[1] - waypoint.location[1],
+                            )
+                            if distance_to_waypoint > 1.0:
+                                node.get_logger().warn(
+                                    f"Robot [{robot_name}] is {distance_to_waypoint:.2f} m "
+                                    f"away from configured start waypoint "
+                                    f"[{initial_waypoint}]. Using the live pose instead."
+                                )
+                                use_configured_start = False
+
+                    if use_configured_start:
                         node.get_logger().info(
                             f"Using provided initial waypoint "
                             f"[{initial_waypoint}] "
                             f"and orientation [{initial_orientation:.2f}] to "
                             f"initialize starts for robot [{robot_name}]")
-                        # Get the waypoint index for initial_waypoint
                         initial_waypoint_index = nav_graph.find_waypoint(
                             initial_waypoint).index
                         starts = [plan.Start(time_now,
                                              initial_waypoint_index,
                                              initial_orientation)]
                     else:
+                        max_merge_waypoint_distance = float(
+                            rmf_config["start"].get("max_merge_waypoint_distance", 0.1)
+                        )
+                        max_merge_lane_distance = float(
+                            rmf_config["start"].get("max_merge_lane_distance", 1.0)
+                        )
                         node.get_logger().info(
-                            f"Running compute_plan_starts for robot: "
-                            "{robot_name}")
+                            f"Running compute_plan_starts for robot: {robot_name} "
+                            f"(waypoint_merge={max_merge_waypoint_distance:.2f} m, "
+                            f"lane_merge={max_merge_lane_distance:.2f} m)"
+                        )
                         starts = plan.compute_plan_starts(
                             nav_graph,
                             rmf_config['start']['map_name'],
-                            position,
-                            time_now)
+                            rmf_position,
+                            time_now,
+                            max_merge_waypoint_distance=max_merge_waypoint_distance,
+                            max_merge_lane_distance=max_merge_lane_distance,
+                        )
+
+                        if starts is None or len(starts) == 0:
+                            nearest_waypoint, nearest_distance = _nearest_graph_waypoint(
+                                nav_graph, rmf_position
+                            )
+                            if nearest_waypoint is not None:
+                                node.get_logger().warn(
+                                    f"Unable to merge live pose for robot [{robot_name}] "
+                                    f"into the nav graph. Falling back to nearest "
+                                    f"waypoint [{nearest_waypoint.waypoint_name}] "
+                                    f"({nearest_distance:.2f} m away)."
+                                )
+                                starts = [
+                                    plan.Start(
+                                        time_now,
+                                        nearest_waypoint.index,
+                                        rmf_position[2],
+                                    )
+                                ]
 
                     if starts is None or len(starts) == 0:
                         node.get_logger().error(
@@ -285,7 +374,7 @@ def initialize_fleet(config_yaml, nav_graph_path, node, use_sim_time, server_uri
                         transforms=transforms,
                         map_name=rmf_config['start']['map_name'],
                         start=starts[0],
-                        position=position,
+                        position=rmf_position,
                         charger_waypoint=rmf_config['charger']['waypoint'],
                         update_frequency=rmf_config.get(
                             'robot_state_update_frequency', 1),

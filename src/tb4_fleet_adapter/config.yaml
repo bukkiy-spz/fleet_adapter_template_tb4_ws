@@ -50,6 +50,8 @@ robots:
         map_name: "L1"
         waypoint: "robot2_charger"
         orientation: 0.093749
+        max_merge_waypoint_distance: 2.5
+        max_merge_lane_distance: 2.5
       charger:
         waypoint: "robot2_charger"
 
