@@ -54,8 +54,8 @@ rmf_fleet:
     power: 15.0
   tool_system:
     power: 0.0
-  recharge_threshold: 0.2
-  recharge_soc: 1.0
+  recharge_threshold: 0.15
+  recharge_soc: 0.2
   adapter_discovery_timeout_sec: 12.0
   adapter_init_retry_interval_sec: 1.5
   adapter_init_max_retries: 0
