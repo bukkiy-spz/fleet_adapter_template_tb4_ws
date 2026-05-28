@@ -3,11 +3,18 @@
 import argparse
 import math
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = REPO_ROOT / "src" / "tb4_fleet_adapter"
+sys.path.insert(0, str(PACKAGE_ROOT))
+
+from tb4_fleet_adapter import nudged_compat as nudged  # noqa: E402
 
 
 def load_map_yaml(path: Path):
@@ -38,6 +45,14 @@ def load_nav_graph(path: Path, level_name: str):
         data = yaml.safe_load(f)
     level = data["levels"][level_name]
     return level["vertices"], level["lanes"]
+
+
+def load_reference_config(path: Path):
+    with path.open() as f:
+        data = yaml.safe_load(f)
+    rmf = data["reference_coordinates"]["rmf"]
+    robot = data["reference_coordinates"]["robot"]
+    return rmf, robot
 
 
 def yaw_from_quaternion(x, y, z, w):
@@ -110,13 +125,23 @@ def main():
     )
     parser.add_argument(
         "--nav-graph",
-        default="/home/masu_ubu/rmf_main_ws/maps/tb4/nav_graphs/1.yaml",
+        default="/home/masu_ubu/rmf_main_ws/maps/tb4_rebuild_20260521/nav_graphs/0.yaml",
         help="Path to nav graph yaml",
+    )
+    parser.add_argument(
+        "--config",
+        default="/home/masu_ubu/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config.yaml",
+        help="Path to adapter config yaml (used for RMF->robot transform)",
     )
     parser.add_argument(
         "--level",
         default="L1",
         help="Nav graph level name",
+    )
+    parser.add_argument(
+        "--use-robot-frame",
+        action="store_true",
+        help="Transform nav graph from RMF coordinates into robot map coordinates",
     )
     parser.add_argument(
         "--topic",
@@ -138,11 +163,17 @@ def main():
 
     map_yaml_path = Path(args.map_yaml)
     nav_graph_path = Path(args.nav_graph)
+    config_path = Path(args.config)
 
     map_yaml, image_path = load_map_yaml(map_yaml_path)
     image = load_map_image(image_path)
     extent = map_extent(map_yaml, image)
     vertices, lanes = load_nav_graph(nav_graph_path, args.level)
+
+    transform_rmf_to_robot = None
+    if args.use_robot_frame:
+        rmf_points, robot_points = load_reference_config(config_path)
+        transform_rmf_to_robot = nudged.estimate(rmf_points, robot_points)
 
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(image, cmap="gray", origin="lower", extent=extent)
@@ -151,12 +182,17 @@ def main():
         start_idx, end_idx, _ = lane
         x1, y1, _meta1 = vertices[start_idx]
         x2, y2, _meta2 = vertices[end_idx]
+        if transform_rmf_to_robot is not None:
+            x1, y1 = transform_rmf_to_robot.transform([x1, y1])
+            x2, y2 = transform_rmf_to_robot.transform([x2, y2])
         ax.plot([x1, x2], [y1, y2], color="tab:blue", linewidth=1.5, alpha=0.8)
 
     xs = []
     ys = []
     for idx, vertex in enumerate(vertices):
         x, y, meta = vertex
+        if transform_rmf_to_robot is not None:
+            x, y = transform_rmf_to_robot.transform([x, y])
         name = meta.get("name", f"v{idx}")
         xs.append(x)
         ys.append(y)

@@ -1,19 +1,43 @@
 rmf_fleet:
-  name: "tb4_fleet"
+  name: tb4_fleet
   fleet_manager:
-    prefix: "/robot2"
-    user: ""
-    password: ""
+    prefix: /robot2
+    user: ''
+    password: ''
     api:
-      pose_topic: "/robot2/amcl_pose"
-      battery_topic: "/robot2/battery_state"
-      navigate_action: "/robot2/navigate_to_pose"
+      pose_topic: /robot2/amcl_pose
+      battery_topic: /robot2/battery_state
+      navigate_action: /robot2/navigate_to_pose
+      use_native_dock_action: true
+      dock_action: /robot2/dock
+      dock_action_wait_timeout_sec: 20.0
+      use_native_undock_action: true
+      undock_action: /robot2/undock
+      undock_action_wait_timeout_sec: 20.0
+      undock_goal_wait_timeout_sec: 15.0
+      auto_undock_before_navigate: true
+      dock_status_topic: /robot2/dock_status
+      ir_opcode_topic: /robot2/ir_opcode
+      dock_visible_stable_sec: 0.45
+      dock_visible_min_true_samples: 2
+      dock_visible_stable_ratio: 0.7
+      dock_visible_recent_sec: 1.0
+      allow_recent_visible_fallback: true
+      require_recent_ir_opcode_for_dock: false
+      ir_opcode_window_sec: 2.0
+      ir_opcode_min_count: 1
+      require_charging_state_for_docked: true
+      min_charging_current_a: 0.03
       connection_timeout_sec: 20.0
       pose_wait_timeout_sec: 20.0
       nav_action_wait_timeout_sec: 20.0
   limits:
-    linear: [0.3, 0.5]
-    angular: [0.8, 1.5]
+    linear:
+    - 0.3
+    - 0.5
+    angular:
+    - 0.8
+    - 1.5
   profile:
     footprint: 0.22
     vicinity: 0.35
@@ -30,37 +54,78 @@ rmf_fleet:
     power: 15.0
   tool_system:
     power: 0.0
-  recharge_threshold: 0.20
+  recharge_threshold: 0.2
   recharge_soc: 1.0
+  adapter_discovery_timeout_sec: 12.0
+  adapter_init_retry_interval_sec: 1.5
+  adapter_init_max_retries: 0
   publish_fleet_state: true
   account_for_battery_drain: true
   task_capabilities:
     loop: true
     delivery: false
     clean: false
-    finishing_request: "park"
-
+    finishing_request: park
 robots:
   robot2:
     robot_config:
       max_delay: 10.0
+      suppress_unsolicited_startup_path: true
+      startup_suppress_waypoint: LP1
+      startup_path_grace_sec: 120.0
+      startup_undock_to_pre_dock: true
+      startup_init_delay_sec: 1.0
+      startup_undock_wait_timeout_sec: 35.0
+      startup_pre_dock_nav_timeout_sec: 45.0
+      require_manual_dispatch_gate: true
+      manual_dispatch_gate_file: /tmp/tb4_manual_dispatch_enabled_robot2
+      dock_recovery_retries: 8
+      dock_lost_visibility_timeout_sec: 1.2
+      dock_search_angle_step_rad: 0.18
+      dock_search_angle_max_rad: 3.14159
+      dock_search_settle_sec: 0.5
+      dock_pre_search_forward_step_m: 0.04
+      dock_pre_search_forward_max_m: 0.2
+      dock_pre_search_angle_step_rad: 0.17
+      dock_pre_search_angle_max_rad: 0.7
+      dock_pre_search_settle_sec: 0.4
+      dock_enable_far_progressive_search: false
+      dock_approach_step_m: 0.06
+      dock_approach_max_total_m: 0.55
+      dock_approach_min_standoff_m: 0.22
+      dock_approach_heading_bias_rad: 0.0
+      dock_max_duration_sec: 40.0
+      dock_abort_pre_dock_drift_m: 0.45
+      dock_abort_max_distance_m: 0.85
+      dock_abort_rebound_m: 0.1
     rmf_config:
       robot_state_update_frequency: 1.0
       start:
-        map_name: "L1"
-        waypoint: "robot2_charger"
-        orientation: 3.031231
+        map_name: L1
+        waypoint: robot2_charger
+        orientation: 0.315728
       charger:
-        waypoint: "robot2_charger"
-
+        waypoint: robot2_charger
 reference_coordinates:
   rmf:
-    - [-2.340755, -0.395168] # robot2_charger
-    - [-2.202657, -0.379554] # LP1
-    - [-1.610652, 0.064261]  # LP2
-    - [-1.125449, -0.608854] # LP3
+  - - 3.729252
+    - -2.005538
+  - - 3.004834
+    - -2.242173
+  - - 1.787844
+    - -2.686477
+  - - 0.908918
+    - -1.271479
+  - - 2.352881
+    - -0.672646
   robot:
-    - [-2.340755, -0.395168] # robot2_charger
-    - [-2.202657, -0.379554] # LP1
-    - [-1.610652, 0.064261]  # LP2
-    - [-1.125449, -0.608854] # LP3
+  - - -0.31676
+    - -0.34151
+  - - -0.599389
+    - -0.37533
+  - - -1.57137
+    - -0.764647
+  - - -2.408269
+    - 0.591567
+  - - -1.234636
+    - 1.09947

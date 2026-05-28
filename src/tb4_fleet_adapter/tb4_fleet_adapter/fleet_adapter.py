@@ -115,20 +115,40 @@ def initialize_fleet(config_yaml, nav_graph_path, node, use_sim_time, server_uri
     # Adapter
     fleet_name = fleet_config['name']
     adapter_name = f'{fleet_name}_fleet_adapter'
+    adapter_discovery_timeout_sec = float(
+        fleet_config.get('adapter_discovery_timeout_sec', 120.0)
+    )
+    adapter_init_retry_interval_sec = float(
+        fleet_config.get('adapter_init_retry_interval_sec', 3.0)
+    )
+    adapter_init_max_retries = int(
+        fleet_config.get('adapter_init_max_retries', 0)
+    )  # 0 means infinite retries
+
     adapter = None
-    adapter_deadline = time.time() + 90.0
-    while adapter is None and time.time() < adapter_deadline:
-        adapter = adpt.Adapter.make(adapter_name)
+    attempt = 0
+    while adapter is None:
+        attempt += 1
+        wait_time = None
+        if adapter_discovery_timeout_sec > 0.0:
+            wait_time = timedelta(seconds=adapter_discovery_timeout_sec)
+        adapter = adpt.Adapter.make(adapter_name, wait_time=wait_time)
         if adapter is None:
             node.get_logger().warn(
-                "Unable to initialize fleet adapter yet; waiting for RMF "
-                "schedule node discovery..."
+                "Unable to initialize fleet adapter yet "
+                f"(attempt {attempt}); waiting for RMF schedule node "
+                "discovery..."
             )
-            time.sleep(2.0)
+            if adapter_init_max_retries > 0 and attempt >= adapter_init_max_retries:
+                raise RuntimeError(
+                    "Unable to initialize fleet adapter after "
+                    f"{attempt} attempts. Please ensure RMF Schedule Node "
+                    "is running and DDS discovery is healthy."
+                )
+            time.sleep(adapter_init_retry_interval_sec)
+
     if use_sim_time:
         adapter.node.use_sim_time()
-    assert adapter, ("Unable to initialize fleet adapter. Please ensure "
-                     "RMF Schedule Node is running")
     node.get_logger().info("Starting RMF adapter core")
     adapter.start()
     time.sleep(1.0)

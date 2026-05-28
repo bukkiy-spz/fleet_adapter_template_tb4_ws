@@ -46,7 +46,7 @@ def main():
     )
     parser.add_argument(
         "--nav-graph",
-        default="/home/masu_ubu/rmf_main_ws/maps/tb4/nav_graphs/1.yaml",
+        default="/home/masu_ubu/rmf_main_ws/maps/tb4_rebuild_20260521/nav_graphs/0.yaml",
         help="Path to RMF nav graph",
     )
     parser.add_argument(

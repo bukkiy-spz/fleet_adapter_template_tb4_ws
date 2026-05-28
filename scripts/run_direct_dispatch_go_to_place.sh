@@ -4,6 +4,7 @@ set -euo pipefail
 place="${1:-LP1}"
 robot="${2:-robot2}"
 fleet="${3:-tb4_fleet}"
+dispatch_gate_file="/tmp/tb4_manual_dispatch_enabled_robot2"
 
 export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES-}"
 export AMENT_PYTHON_EXECUTABLE="${AMENT_PYTHON_EXECUTABLE-$(command -v python3)}"
@@ -22,5 +23,7 @@ source /home/masu_ubu/turtlebot4_ws/scripts/robot2_env.bash
 if [[ ${restore_nounset} -eq 1 ]]; then
   set -u
 fi
+
+date +%s > "${dispatch_gate_file}"
 
 ros2 run rmf_demos_tasks dispatch_go_to_place -F "${fleet}" -R "${robot}" -p "${place}"

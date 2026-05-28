@@ -12,7 +12,7 @@
   - `~/rmf_main_ws/maps/tb4/robot2_map_latest.yaml`
   - `~/rmf_main_ws/maps/tb4/robot2_map_latest.pgm`
 - nav graph:
-  - `~/rmf_main_ws/maps/tb4/nav_graphs/1.yaml`
+  - `~/rmf_main_ws/maps/tb4_rebuild_20260521/nav_graphs/0.yaml`
 - adapter config:
   - `~/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config.yaml`
 
@@ -21,10 +21,10 @@
 現在の `reference_coordinates` は次の 4 点でそろえてある。
 
 ```text
-robot2_charger: [-1.713150, -0.487242]  # yaw=0.093749
-LP1:            [-2.398943, -0.159392]
-LP2:            [-2.314348, -0.370411]
-LP3:            [-2.354361, -0.368523]
+robot2_charger: [3.729252, -2.005538]   # yaw=0.315728
+LP1:            [1.787844, -2.686477]
+LP2:            [0.908918, -1.271479]
+LP3:            [2.352881, -0.672646]
 ```
 
 このため、現状の `rmf -> robot` 変換は identity にかなり近い。
@@ -57,6 +57,6 @@ python3 scripts/plot_tb4_map_navgraph.py \
 
 そのときは最低でも次の 3 つを同時に更新する。
 
-- `~/rmf_main_ws/maps/tb4/nav_graphs/1.yaml`
+- `~/rmf_main_ws/maps/tb4_rebuild_20260521/nav_graphs/0.yaml`
 - `~/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config.yaml`
-- `~/rmf_main_ws/maps/tb4/tb4_20260518.building.yaml` または新しい `.building.yaml`
+- `~/rmf_main_ws/maps/tb4_rebuild_20260521/tb4_20260521.building.yaml`

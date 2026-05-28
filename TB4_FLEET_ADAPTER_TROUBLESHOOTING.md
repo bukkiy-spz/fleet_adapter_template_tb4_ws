@@ -2,20 +2,7 @@
 
 このファイルは、`fleet_adapter_template_tb4_ws` で `RMF -> adapter -> robot2` を通すときの切り分けメモです。
 
-## 1. まず direct Nav2 を通す
-
-adapter より前に、`robot2` 単体で次が通ることを確認する。
-
-```bash
-cd ~/turtlebot4_ws
-source scripts/robot2_env.bash
-timeout 5 ros2 topic echo /robot2/amcl_pose --once
-ros2 action list | grep /robot2/navigate_to_pose
-```
-
-ここが通らない間は `RMF` 側ではなく `turtlebot4_ws` 側を先に直す。
-
-## 2. `Unable to initialize fleet adapter yet; waiting for RMF schedule node discovery...`
+## 1. `Unable to initialize fleet adapter yet; waiting for RMF schedule node discovery...`
 
 原因:
 
@@ -28,9 +15,7 @@ ros2 action list | grep /robot2/navigate_to_pose
 2. その端末を閉じない
 3. 別端末で `./scripts/run_direct_adapter.sh` を起動する
 
-## 3. `Successfully added new robot: robot2` が出ない
-
-まず `RobotAPI` 前提を確認する。
+## 2. `Successfully added new robot: robot2` が出ない
 
 ```bash
 cd ~/turtlebot4_ws
@@ -42,33 +27,9 @@ ros2 action list | grep /robot2/navigate_to_pose
 
 これが通らないと adapter から robot を登録できない。
 
-## 4. adapter が charger から始まったことになってしまう
+## 3. `Unable to determine StartSet for robot2`
 
-過去の問題:
-
-- config の `start.waypoint` が `robot2_charger`
-- でも実機は別の場所にいる
-- adapter が charger から始まったと誤認する
-
-現状:
-
-- `fleet_adapter.py` を修正済み
-- 実機が configured start waypoint から `1.0m` 以上離れているときは、live pose へ自動 fallback する
-- `compute_plan_starts()` の merge 距離は
-  `max_merge_waypoint_distance=2.5` / `max_merge_lane_distance=2.5`
-  に広げてある
-- それでも merge できないときは nearest waypoint fallback を試す
-
-adapter ログの確認点:
-
-- `Live robot pose [robot2] ...`
-- `Using the live pose instead.`
-- `Running compute_plan_starts for robot: robot2 (waypoint_merge=..., lane_merge=...)`
-- `Falling back to nearest waypoint [...]`
-
-## 5. `Unable to determine StartSet for robot2`
-
-まず本当に最新版の adapter を使っているか確認する。
+まず adapter を build し直す。
 
 ```bash
 cd ~/fleet_adapter_template_tb4_ws
@@ -77,46 +38,102 @@ source ~/rmf_main_ws/install/setup.bash
 colcon build --packages-select tb4_fleet_adapter
 ```
 
-そのうえで、実機が nav graph からあまりに離れていないかを map overlay で見る。
+そのうえで overlay を確認する。
 
 ```bash
-cd ~/fleet_adapter_template_tb4_ws
-source /opt/ros/humble/setup.bash
-source ~/turtlebot4_ws/scripts/robot2_env.bash
-python3 scripts/plot_tb4_map_navgraph.py \
+python3 ~/fleet_adapter_template_tb4_ws/scripts/plot_tb4_map_navgraph.py \
+  --use-robot-frame \
   --topic /robot2/amcl_pose \
-  --save ~/obs_recording/tb4_newmap_navgraph_overlay.png
+  --save ~/obs_recording/tb4_20260521_overlay_robot_frame_latest.png
 ```
 
-## 6. `Coordinate transformation error` は小さいのに位置がずれる
+## 4. `worldToMap failed` / `goal is off the global costmap`
 
-まず map と nav graph の見た目を重ねて確認する。
+原因:
+
+- `reference_coordinates` が実機 map と合っていない
+- charger / LP の robot 側実測値が古い
+
+確認:
 
 ```bash
-cd ~/fleet_adapter_template_tb4_ws
-source /opt/ros/humble/setup.bash
-source ~/turtlebot4_ws/scripts/robot2_env.bash
-python3 scripts/plot_tb4_map_navgraph.py \
-  --topic /robot2/amcl_pose \
-  --save ~/obs_recording/tb4_newmap_navgraph_overlay.png
+python3 ~/fleet_adapter_template_tb4_ws/scripts/analyze_reference_coordinates.py \
+  --config ~/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config.yaml \
+  --nav-graph ~/rmf_main_ws/maps/tb4_rebuild_20260521/nav_graphs/0.yaml
 ```
 
-ズレるときの確認対象:
+必要なら再実測:
 
-- `~/rmf_main_ws/maps/tb4/nav_graphs/1.yaml`
-- `~/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config.yaml`
-- `reference_coordinates`
+```bash
+python3 ~/fleet_adapter_template_tb4_ws/scripts/record_reference_pose.py --label robot2_charger
+python3 ~/fleet_adapter_template_tb4_ws/scripts/record_reference_pose.py --label pre_dock
+python3 ~/fleet_adapter_template_tb4_ws/scripts/record_reference_pose.py --label LP1
+python3 ~/fleet_adapter_template_tb4_ws/scripts/record_reference_pose.py --label LP2
+python3 ~/fleet_adapter_template_tb4_ws/scripts/record_reference_pose.py --label LP3
+```
 
-## 7. `/fleet_states` が出ない
+## 5. Marker は出ているのに RViz で waypoint が見えない
 
-現状の adapter は、最初の robot 登録が終わってから fleet state publish を有効化する。
+原因:
 
-そのため、まずは adapter ログでこれを確認する。
+- Marker が RMF 座標のまま出ている
+- 実機 `map` 上では画面外
+
+対処:
+
+```bash
+python3 ~/fleet_adapter_template_tb4_ws/scripts/publish_nav_graph_markers.py \
+  --use-robot-frame
+```
+
+## 6. `python3 scripts/...` が見つからない
+
+原因:
+
+- `source ~/turtlebot4_ws/scripts/robot2_env.bash` の後で CWD が `~/turtlebot4_ws` に変わる
+
+対処:
+
+- `python3 ~/fleet_adapter_template_tb4_ws/scripts/...` のように絶対パスで実行する
+- または source 後に `cd ~/fleet_adapter_template_tb4_ws` し直す
+
+## 7. `dispatch_go_to_place` で `L1` を投げて失敗する
+
+原因:
+
+- `L1` は階名で waypoint 名ではない
+
+有効な place 名:
+
+- `LP1`
+- `LP2`
+- `LP3`
+- `pre_dock`
+- `robot2_charger`
+
+## 8. 毎回 charger に戻ろうとしてから目標へ行く / 目標後に pre_dock に戻る
+
+原因は `Nav2` 単体ではなく、現状の RMF 設定と adapter 実装の組み合わせ。
+
+現状:
+
+- `finishing_request: park`
+- charger lane は `pre_dock -> robot2_charger`
+- `dock()` / `start_process()` は実機 docking 未実装
+
+そのため、見かけ上:
+
+- charger 系を経由しようとする
+- タスク後に `pre_dock` 側へ戻ろうとする
+
+## 9. `/fleet_states` が出ない
+
+確認:
 
 - `Successfully added new robot: robot2`
 - `Enabled fleet state topic publishing at 1.00 s`
 
-確認コマンド:
+コマンド:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -126,20 +143,7 @@ source ~/turtlebot4_ws/scripts/robot2_env.bash
 timeout 5 ros2 topic echo /fleet_states --once
 ```
 
-## 8. `dispatch_go_to_place` は通るが robot が動かない
-
-切り分け順:
-
-1. `ros2 action list | grep /robot2/navigate_to_pose`
-2. `ros2 topic echo /robot2/amcl_pose --once`
-3. `ros2 topic echo /fleet_states --once`
-4. adapter ログで `navigate` や `failed to reach its target` を確認
-
-direct Nav2 goal が動かなければ adapter の問題ではない。
-
-## 9. `Requesting new schedule update because update timed out`
-
-この warning が出続けるときは、`schedule` と `adapter` を両方止めて helper script から起動し直す。
+## 10. `Requesting new schedule update because update timed out`
 
 ```bash
 pkill -INT -f rmf_traffic_schedule || true
@@ -154,25 +158,16 @@ cd ~/fleet_adapter_template_tb4_ws
 ./scripts/run_direct_adapter.sh
 ```
 
-## 10. helper script で `AMENT_TRACE_SETUP_FILES` や `COLCON_TRACE` の未定義エラー
-
-現状:
-
-- `run_direct_schedule.sh`
-- `run_direct_adapter.sh`
-- `run_direct_dispatch_go_to_place.sh`
-
-には `set -u` と ROS setup の相性回避ガードを入れてある。
-
-もし同じ症状が再発したら、古い shell を開きっぱなしにせず新しい terminal で再実行する。
-
 ## 11. map コピーが古い
-
-今作った map を `rmf_main_ws` へ反映し忘れると、確認用の overlay や将来の Traffic Editor 作業が古いままになる。
-
-同期:
 
 ```bash
 cd ~/fleet_adapter_template_tb4_ws
 python3 scripts/sync_robot_map_to_rmf.py --also-latest
+```
+
+確認:
+
+```bash
+ls -la ~/rmf_main_ws/maps/tb4
+sed -n '1,40p' ~/rmf_main_ws/maps/tb4/robot2_map_latest.yaml
 ```
