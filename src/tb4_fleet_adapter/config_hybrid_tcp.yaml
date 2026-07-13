@@ -1,0 +1,66 @@
+rmf_fleet:
+  name: "tb4_fleet"
+  fleet_manager:
+    prefix: "/robot2"
+    user: ""
+    password: ""
+    api:
+      pose_topic: "/robot2/amcl_pose_local"
+      battery_topic: "/robot2/battery_state_local"
+      navigate_action: "/robot2/navigate_to_pose"
+      connection_timeout_sec: 20.0
+      pose_wait_timeout_sec: 20.0
+      nav_action_wait_timeout_sec: 20.0
+  limits:
+    linear: [0.3, 0.5]
+    angular: [0.8, 1.5]
+  profile:
+    footprint: 0.22
+    vicinity: 0.35
+  reversible: true
+  battery_system:
+    voltage: 14.4
+    capacity: 5.0
+    charging_current: 1.0
+  mechanical_system:
+    mass: 11.0
+    moment_of_inertia: 0.25
+    friction_coefficient: 0.22
+  ambient_system:
+    power: 15.0
+  tool_system:
+    power: 0.0
+  recharge_threshold: 0.20
+  recharge_soc: 1.0
+  publish_fleet_state: true
+  account_for_battery_drain: true
+  task_capabilities:
+    loop: true
+    delivery: false
+    clean: false
+    finishing_request: "park"
+
+robots:
+  robot2:
+    robot_config:
+      max_delay: 10.0
+    rmf_config:
+      robot_state_update_frequency: 1.0
+      start:
+        map_name: "L1"
+        waypoint: "robot2_charger"
+        orientation: 3.031231
+      charger:
+        waypoint: "robot2_charger"
+
+reference_coordinates:
+  rmf:
+    - [2.570735794418745, 1.841374076424285]   # robot2_charger
+    - [2.4354339105019687, 1.8392599844881048] # LP1
+    - [1.3022806326989695, 2.680668575083881]  # LP2
+    - [0.6088584776254922, 1.7631526747855812] # LP3
+  robot:
+    - [-2.340755, -0.395168] # robot2_charger
+    - [-2.202657, -0.379554] # LP1
+    - [-1.610652, 0.064261]  # LP2
+    - [-1.125449, -0.608854] # LP3

@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+
+from tb4_fleet_adapter.host_robot_topic_tcp_bridge import receiver_main
+
+
+if __name__ == "__main__":
+    receiver_main()

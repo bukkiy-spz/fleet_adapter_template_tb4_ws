@@ -1,0 +1,29 @@
+{
+  plugins: {
+    ros2dds: {
+      allow: {
+        publishers: [
+          ".*/robot2/amcl_pose",
+          ".*/robot2/tf",
+          ".*/robot2/battery_state"
+        ],
+        subscribers: [],
+        service_servers: [],
+        service_clients: [],
+        action_servers: [".*/robot2/navigate_to_pose"],
+        action_clients: [],
+      },
+      pub_max_frequencies: [
+        ".*/robot2/battery_state=1",
+        ".*/robot2/amcl_pose=5"
+      ],
+    },
+  },
+  mode: "client",
+  connect: {
+    endpoints: ["tcp/192.168.11.104:7447"]
+  },
+  listen: {
+    endpoints: []
+  },
+}
