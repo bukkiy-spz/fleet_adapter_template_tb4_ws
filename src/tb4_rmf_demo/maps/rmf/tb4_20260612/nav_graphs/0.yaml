@@ -1,0 +1,119 @@
+building_name: tb4_20260612
+levels:
+  L1:
+    lanes:
+    - - 0
+      - 1
+      - {orientation_constraint: backward, speed_limit: 0, undock_name: robot6_charger}
+    - - 1
+      - 0
+      - {dock_name: robot6_charger, orientation_constraint: forward, speed_limit: 0}
+    - - 2
+      - 3
+      - {orientation_constraint: backward, speed_limit: 0, undock_name: robot5_charger}
+    - - 3
+      - 2
+      - {dock_name: robot5_charger, orientation_constraint: forward, speed_limit: 0}
+    - - 4
+      - 5
+      - {dock_name: robot2_charger, orientation_constraint: forward, speed_limit: 0}
+    - - 5
+      - 4
+      - {orientation_constraint: backward, speed_limit: 0, undock_name: robot2_charger}
+    - - 6
+      - 1
+      - {speed_limit: 0}
+    - - 1
+      - 6
+      - {speed_limit: 0}
+    - - 1
+      - 3
+      - {speed_limit: 0}
+    - - 3
+      - 1
+      - {speed_limit: 0}
+    - - 3
+      - 7
+      - {speed_limit: 0}
+    - - 7
+      - 3
+      - {speed_limit: 0}
+    - - 7
+      - 8
+      - {speed_limit: 0}
+    - - 8
+      - 7
+      - {speed_limit: 0}
+    - - 8
+      - 4
+      - {speed_limit: 0}
+    - - 4
+      - 8
+      - {speed_limit: 0}
+    - - 4
+      - 9
+      - {speed_limit: 0}
+    - - 9
+      - 4
+      - {speed_limit: 0}
+    - - 9
+      - 6
+      - {speed_limit: 0}
+    - - 6
+      - 9
+      - {speed_limit: 0}
+    - - 6
+      - 7
+      - {speed_limit: 0}
+    - - 7
+      - 6
+      - {speed_limit: 0}
+    - - 8
+      - 9
+      - {speed_limit: 0}
+    - - 9
+      - 8
+      - {speed_limit: 0}
+    - - 9
+      - 7
+      - {speed_limit: 0}
+    - - 7
+      - 9
+      - {speed_limit: 0}
+    - - 8
+      - 6
+      - {speed_limit: 0}
+    - - 6
+      - 8
+      - {speed_limit: 0}
+    vertices:
+    - - 1.1972718347573243
+      - -1.1213489332479822
+      - {dock_name: robot6_charger, is_charger: true, is_parking_spot: true, name: robot6_charger}
+    - - 1.6396317946975847
+      - -1.326899057191405
+      - {name: robot6_predock}
+    - - 2.2428560862966687
+      - -0.6611101358281476
+      - {dock_name: robot5_charger, is_charger: true, is_parking_spot: true, name: robot5_charger}
+    - - 2.421599255435066
+      - -1.1213489332479822
+      - {name: robot5_predock}
+    - - 3.5610078487919985
+      - -2.613768504804648
+      - {name: robot2_predock}
+    - - 4.070407798573495
+      - -2.560154595194598
+      - {dock_name: robot2_charger, is_charger: true, is_parking_spot: true, name: robot2_charger}
+    - - 1.3290011202579037
+      - -1.8530703058475453
+      - {name: LP3}
+    - - 3.2540614354258586
+      - -0.7621899856494568
+      - {name: LP4}
+    - - 3.7229797190557514
+      - -2.094920572638245
+      - {name: LP1}
+    - - 1.9509405539974265
+      - -3.0080974538168497
+      - {name: LP2}

@@ -1,42 +1,60 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
-config_path="${TB4_CONFIG_PATH:-/home/masu_ubu/fleet_adapter_template_tb4_ws/src/tb4_fleet_adapter/config_tb4_20260612_multi.yaml}"
-nav_graph_path="${TB4_NAV_GRAPH_PATH:-/home/masu_ubu/rmf_main_ws/maps/tb4_rebuild_20260612/nav_graphs/0.yaml}"
-env_script="${TB4_ENV_SCRIPT:-/home/masu_ubu/turtlebot4_ws/scripts/shared_multi_robot_env.bash}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-python3 - "${config_path}" <<'PY'
+# shellcheck source=lib/tb4_paths.sh
+source "${SCRIPT_DIR}/lib/tb4_paths.sh"
+
+"${SCRIPT_DIR}/check_tb4_rmf_assets.sh"
+
+python3 - "${TB4_CONFIG_PATH}" <<'PY'
 import sys
+from pathlib import Path
+
 import yaml
 
-config_path = sys.argv[1]
-with open(config_path, "r", encoding="utf-8") as f:
-    data = yaml.safe_load(f)
+config_path = Path(sys.argv[1])
 
-ref = data.get("reference_coordinates", {})
-rmf = ref.get("rmf") or []
-robot = ref.get("robot") or []
+with config_path.open("r", encoding="utf-8") as stream:
+    config = yaml.safe_load(stream)
 
-if not rmf:
-    print(f"[run_direct_adapter_tb4_20260612] rmf coordinates are empty in {config_path}", file=sys.stderr)
-    sys.exit(2)
+reference_coordinates = config.get("reference_coordinates", {})
+rmf_coordinates = reference_coordinates.get("rmf") or []
+robot_coordinates = reference_coordinates.get("robot") or []
 
-if not robot:
-    print(f"[run_direct_adapter_tb4_20260612] robot coordinates are empty in {config_path}", file=sys.stderr)
-    print("[run_direct_adapter_tb4_20260612] measure robot-side points first, then retry", file=sys.stderr)
-    sys.exit(2)
-
-if len(rmf) != len(robot):
+if not rmf_coordinates:
     print(
-        f"[run_direct_adapter_tb4_20260612] reference coordinate length mismatch: "
-        f"rmf={len(rmf)} robot={len(robot)}",
+        f"[error] RMF reference coordinates are empty: {config_path}",
         file=sys.stderr,
     )
     sys.exit(2)
+
+if not robot_coordinates:
+    print(
+        f"[error] Robot reference coordinates are empty: {config_path}",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+if len(rmf_coordinates) != len(robot_coordinates):
+    print(
+        "[error] Reference coordinate length mismatch: "
+        f"rmf={len(rmf_coordinates)}, "
+        f"robot={len(robot_coordinates)}",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+print(
+    "[ok] Reference coordinates: "
+    f"{len(rmf_coordinates)} corresponding points"
+)
 PY
 
-export TB4_CONFIG_PATH="${config_path}"
-export TB4_NAV_GRAPH_PATH="${nav_graph_path}"
-export TB4_ENV_SCRIPT="${env_script}"
+export TB4_CONFIG_PATH
+export TB4_NAV_GRAPH_PATH
+export TB4_ENV_SCRIPT
 
-exec /home/masu_ubu/fleet_adapter_template_tb4_ws/scripts/run_direct_adapter.sh "$@"
+exec "${SCRIPT_DIR}/run_direct_adapter.sh" "$@"

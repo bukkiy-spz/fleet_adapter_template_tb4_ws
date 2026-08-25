@@ -1,0 +1,121 @@
+building_name: tb4_20260612
+doors: {}
+levels:
+  L1:
+    lanes:
+    - - 0
+      - 1
+      - {orientation_constraint: backward}
+    - - 1
+      - 0
+      - {orientation_constraint: forward}
+    - - 2
+      - 3
+      - {orientation_constraint: backward}
+    - - 3
+      - 2
+      - {orientation_constraint: forward}
+    - - 4
+      - 5
+      - {orientation_constraint: forward}
+    - - 5
+      - 4
+      - {orientation_constraint: backward}
+    - - 6
+      - 1
+      - {}
+    - - 1
+      - 6
+      - {}
+    - - 1
+      - 3
+      - {}
+    - - 3
+      - 1
+      - {}
+    - - 3
+      - 7
+      - {}
+    - - 7
+      - 3
+      - {}
+    - - 7
+      - 8
+      - {}
+    - - 8
+      - 7
+      - {}
+    - - 8
+      - 4
+      - {}
+    - - 4
+      - 8
+      - {}
+    - - 4
+      - 9
+      - {}
+    - - 9
+      - 4
+      - {}
+    - - 9
+      - 6
+      - {}
+    - - 6
+      - 9
+      - {}
+    - - 6
+      - 7
+      - {}
+    - - 7
+      - 6
+      - {}
+    - - 8
+      - 9
+      - {}
+    - - 9
+      - 8
+      - {}
+    - - 9
+      - 7
+      - {}
+    - - 7
+      - 9
+      - {}
+    - - 8
+      - 6
+      - {}
+    - - 6
+      - 8
+      - {}
+    vertices:
+    - - 1.1972718347573243
+      - -1.1213489332479822
+      - {is_charger: true, is_parking_spot: true, name: robot6_charger}
+    - - 1.6396317946975847
+      - -1.326899057191405
+      - {name: robot6_predock}
+    - - 2.2428560862966687
+      - -0.6611101358281476
+      - {is_charger: true, is_parking_spot: true, name: robot5_charger}
+    - - 2.421599255435066
+      - -1.1213489332479822
+      - {name: robot5_predock}
+    - - 3.5610078487919985
+      - -2.613768504804648
+      - {name: robot2_predock}
+    - - 4.070407798573495
+      - -2.560154595194598
+      - {is_charger: true, is_parking_spot: true, name: robot2_charger}
+    - - 1.3290011202579037
+      - -1.8530703058475453
+      - {name: LP3}
+    - - 3.2540614354258586
+      - -0.7621899856494568
+      - {name: LP4}
+    - - 3.7229797190557514
+      - -2.094920572638245
+      - {name: LP1}
+    - - 1.9509405539974265
+      - -3.0080974538168497
+      - {name: LP2}
+lifts: {}

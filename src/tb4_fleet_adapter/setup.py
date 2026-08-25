@@ -47,7 +47,8 @@ setup(
     cmdclass={'develop': develop},
     entry_points={
         'console_scripts': [
-            'fleet_adapter=tb4_fleet_adapter.fleet_adapter:main'
+            'fleet_adapter=tb4_fleet_adapter.fleet_adapter:main',
+            'transformed_navgraph_visualizer = tb4_fleet_adapter.transformed_navgraph_visualizer:main',
         ],
     },
 )

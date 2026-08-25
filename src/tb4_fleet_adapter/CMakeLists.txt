@@ -13,6 +13,7 @@ install(
     scripts/host_robot_topic_tcp_receiver
     scripts/host_robot_topic_tcp_sender
     scripts/zenoh_topics_to_ros
+    tb4_fleet_adapter/transformed_navgraph_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

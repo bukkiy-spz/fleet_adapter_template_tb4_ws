@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.7">
+  <world name="tb4_20260612">
+    <light name="sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    <scene>
+      <ambient>0.8 0.8 0.8 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <grid>false</grid>
+      <shadows>true</shadows>
+    </scene>
+    <gui>
+      <camera name="gui_camera">
+        <pose>2.577976925602492 -21.82734828681878 10 0 0.6 1.57</pose>
+      </camera>
+      <plugin name="toggle_charging" filename="libtoggle_charging.so" />
+      <plugin name="toggle_floors" filename="libtoggle_floors.so">
+        <floor name="L1" model_name="tb4_20260612_L1" />
+      </plugin>
+    </gui>
+    <include>
+      <name>tb4_20260612_L1</name>
+      <uri>model://tb4_20260612_L1</uri>
+      <pose>0 0 0.0 0 0 0</pose>
+    </include>
+    <rmf_charger_waypoints name="charger_waypoints">
+      <rmf_vertex name="robot6_charger" x="1.1972718347573243" y="-1.1213489332479822" level="L1" />
+      <rmf_vertex name="robot5_charger" x="2.2428560862966687" y="-0.6611101358281476" level="L1" />
+      <rmf_vertex name="robot2_charger" x="4.070407798573495" y="-2.560154595194598" level="L1" />
+    </rmf_charger_waypoints>
+  </world>
+</sdf>
