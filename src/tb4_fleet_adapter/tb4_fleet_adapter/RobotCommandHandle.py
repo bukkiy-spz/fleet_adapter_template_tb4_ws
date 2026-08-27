@@ -38,6 +38,8 @@ class RobotState(enum.IntEnum):
     IDLE = 0
     WAITING = 1
     MOVING = 2
+    WAITING_FOR_STOP = 3
+    WAITING_FOR_NEW_PATH = 4
 
 
 class RobotCommandHandle(adpt.RobotCommandHandle):
@@ -156,6 +158,20 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
         self._quit_path_event = threading.Event()
         self._dock_thread = None
         self._quit_dock_event = threading.Event()
+
+        # A navigation failure must never make the previous waypoint eligible
+        # for immediate redispatch. Each failure cycle requests one RMF replan
+        # after physical stop confirmation. Two independently replanned paths
+        # are allowed before the handle enters a safe hold; this is deliberately
+        # a replan-cycle limit, not a local same-goal retry limit.
+        self._navigation_failure_cycles = 0
+        self._max_navigation_failure_cycles = 2
+        self._replan_requested = False
+        self._awaiting_replan_path = False
+        self._stationary_confirmed_monotonic_time = None
+        # Two maximum observed stationary odom receive gaps (2 * 0.100476692 s).
+        # This non-blocking settling interval follows the odom confirmation.
+        self._failure_replan_backoff_sec = 0.200953384
 
         self.node.get_logger().info(
             f"The robot is starting at: [{self.position[0]:.2f}, "
@@ -332,6 +348,35 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
             self.docking_finished_callback = None
             self.state = RobotState.IDLE
 
+    def _begin_failure_replan(self):
+        """Gate failed navigation behind a physical-stop-confirmed replan."""
+        self._navigation_failure_cycles += 1
+        self._stationary_confirmed_monotonic_time = None
+        self._replan_requested = False
+        if self._navigation_failure_cycles > self._max_navigation_failure_cycles:
+            self.node.get_logger().error(
+                f"Robot [{self.name}] reached the safe replan-cycle limit "
+                f"({self._max_navigation_failure_cycles}); holding without "
+                "redispatching the failed waypoint.")
+            return False
+        self.state = RobotState.WAITING_FOR_STOP
+        self.node.get_logger().warn(
+            f"Robot [{self.name}] navigation failed; waiting for fresh odom "
+            "to confirm physical stop before requesting one RMF replan.")
+        return True
+
+    def _request_replan_after_stop(self):
+        """Request RMF replanning once; the old path remains permanently gated."""
+        if self._replan_requested:
+            return
+        self._replan_requested = True
+        self._awaiting_replan_path = True
+        self.state = RobotState.WAITING_FOR_NEW_PATH
+        self.update_handle.replan()
+        self.node.get_logger().warn(
+            f"Robot [{self.name}] requested RMF replan after physical stop; "
+            "waiting for a fresh path and will not resend the failed goal.")
+
     def stop(self):
         # Stop the robot. Tracking variables should remain unchanged.
         while True:
@@ -400,6 +445,19 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
 
         self.stop()
         self._quit_path_event.clear()
+
+        # A path that arrives while this flag is set is the one solicited by
+        # replan(). Keep its failure-cycle history, but any externally supplied
+        # new path starts an independent navigation sequence.
+        with self._lock:
+            if self._awaiting_replan_path:
+                self.node.get_logger().info(
+                    f"Robot [{self.name}] received fresh RMF replan path.")
+            else:
+                self._navigation_failure_cycles = 0
+            self._awaiting_replan_path = False
+            self._replan_requested = False
+            self._stationary_confirmed_monotonic_time = None
 
         self.node.get_logger().info("Received new path to follow...")
 
@@ -473,7 +531,9 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
             while (
                 self.remaining_waypoints or
                 self.state == RobotState.MOVING or
-                self.state == RobotState.WAITING):
+                self.state == RobotState.WAITING or
+                self.state == RobotState.WAITING_FOR_STOP or
+                self.state == RobotState.WAITING_FOR_NEW_PATH):
                 # Check if we need to abort
                 if self._quit_path_event.is_set():
                     self.node.get_logger().info("Aborting previously followed "
@@ -509,11 +569,11 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
                     if response:
                         self.state = RobotState.MOVING
                     else:
-                        self.node.get_logger().info(
-                            f"Robot {self.name} failed to navigate to "
-                            f"[{x:.0f}, {y:.0f}, {theta:.0f}] coordinates. "
-                            f"Retrying...")
-                        self.sleep_for(0.1)
+                        self.node.get_logger().warn(
+                            f"Robot {self.name} could not send navigation to "
+                            f"[{x:.0f}, {y:.0f}, {theta:.0f}] coordinates.")
+                        if not self._begin_failure_replan():
+                            return
 
                 elif self.state == RobotState.WAITING:
                     self.sleep_for(0.1)
@@ -557,9 +617,9 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
                                 self.on_waypoint = None  # still on a lane
                         elif request_done and not self.api.navigation_succeeded(self.name):
                             self.node.get_logger().warn(
-                                f"Robot [{self.name}] failed to reach its target. "
-                                "Retrying current waypoint...")
-                            self.state = RobotState.IDLE
+                                f"Robot [{self.name}] failed to reach its target.")
+                            if not self._begin_failure_replan():
+                                return
                         else:
                             # Update the lane the robot is on
                             lane = self.get_current_lane()
@@ -590,6 +650,34 @@ class RobotCommandHandle(adpt.RobotCommandHandle):
                             if self.path_index is not None:
                                 self.next_arrival_estimator(
                                     self.path_index, timedelta(seconds=duration))
+                elif self.state == RobotState.WAITING_FOR_STOP:
+                    self.sleep_for(0.1)
+                    if not self.api.is_stationary(self.name):
+                        self._stationary_confirmed_monotonic_time = None
+                        continue
+                    now = time.monotonic()
+                    if self._stationary_confirmed_monotonic_time is None:
+                        self._stationary_confirmed_monotonic_time = now
+                        self.node.get_logger().info(
+                            f"Robot [{self.name}] physical stop confirmed; "
+                            "starting non-blocking replan settling interval.")
+                        continue
+                    if (
+                        now - self._stationary_confirmed_monotonic_time
+                        < self._failure_replan_backoff_sec
+                    ):
+                        continue
+                    if self.update_handle is None:
+                        self.node.get_logger().error(
+                            f"Robot [{self.name}] has no update handle for replan; "
+                            "holding without redispatching the failed waypoint.")
+                        return
+                    self._request_replan_after_stop()
+                elif self.state == RobotState.WAITING_FOR_NEW_PATH:
+                    # follow_new_path() is the only transition out of this
+                    # state. Do not reuse remaining_waypoints from the failed
+                    # path while RMF computes a new itinerary.
+                    self.sleep_for(0.1)
             self.path_finished_callback()
             self.node.get_logger().info(
                 f"Robot {self.name} has successfully navigated along "

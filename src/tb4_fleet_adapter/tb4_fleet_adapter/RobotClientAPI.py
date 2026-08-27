@@ -30,6 +30,7 @@ from collections import deque
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav2_msgs.action import NavigateToPose
+from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
 import rclpy
 from rclpy.qos import DurabilityPolicy
@@ -64,6 +65,10 @@ class RobotAPI:
             "pose_topic", f"{self.namespace}/amcl_pose")
         self.battery_topic = self.api_config.get(
             "battery_topic", f"{self.namespace}/battery_state")
+        # The command-handle node is not placed in a robot namespace, so use
+        # the configured robot prefix to resolve this relative robot interface.
+        self.odom_topic = self.api_config.get(
+            "odom_topic", f"{self.namespace}/odom")
         self.navigate_action = self.api_config.get(
             "navigate_action", f"{self.namespace}/navigate_to_pose")
         self.connection_timeout_sec = float(
@@ -144,6 +149,13 @@ class RobotAPI:
 
         self._lock = threading.Lock()
         self._latest_pose = None
+        self._latest_odom_stamp = None
+        self._latest_odom_receive_monotonic_time = None
+        self._latest_odom_linear_x = None
+        self._latest_odom_linear_y = None
+        self._latest_odom_angular_z = None
+        self._stationary_since_monotonic_time = None
+        self._stationary_sample_count = 0
         self._latest_battery = None
         self._latest_battery_current = None
         self._latest_battery_status = None
@@ -167,6 +179,20 @@ class RobotAPI:
         self._last_undock_time = None
 
         self._max_linear_speed = 0.25
+
+        # Values are derived from the 30 s stationary 3-robot baseline on
+        # 2026-08-27: stationary startup linear residuals peaked at 4.64e-17
+        # m/s. After a native Robot6 undock, stable angular residual was
+        # 6.333e-16 rad/s while meaningful angular motion peaked at 0.7854
+        # rad/s, so the angular threshold is rounded upward to 1.0e-15.
+        # The largest receive gap was 0.100476692 s and the 99th-percentile
+        # gap was 0.082348327 s. The timing values are respectively three
+        # maximum gaps and three p99 gaps.
+        self._odom_stationary_linear_speed_max = 5.0e-17
+        self._odom_stationary_angular_speed_max = 1.0e-15
+        self._odom_stale_timeout_sec = 0.301430076
+        self._odom_stationary_min_samples = 4
+        self._odom_stationary_min_duration_sec = 0.247044981
 
         self._nav_client = ActionClient(
             self.node,
@@ -216,6 +242,18 @@ class RobotAPI:
             ),
         )
 
+        self._odom_sub = self.node.create_subscription(
+            Odometry,
+            self.odom_topic,
+            self._odom_cb,
+            QoSProfile(
+                history=HistoryPolicy.KEEP_LAST,
+                depth=10,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.VOLATILE,
+            ),
+        )
+
         self._dock_status_sub = None
         if Create3DockStatus is not None:
             self._dock_status_sub = self.node.create_subscription(
@@ -244,12 +282,13 @@ class RobotAPI:
             )
 
         self.node.get_logger().info(
-            "RobotAPI using pose_topic='%s', battery_topic='%s', "
+            "RobotAPI using pose_topic='%s', battery_topic='%s', odom_topic='%s', "
             "navigate_action='%s', dock_action='%s', undock_action='%s', "
             "native_dock=%s, native_undock=%s, ir_opcode_topic='%s'"
             % (
                 self.pose_topic,
                 self.battery_topic,
+                self.odom_topic,
                 self.navigate_action,
                 self.dock_action,
                 self.undock_action,
@@ -281,6 +320,49 @@ class RobotAPI:
             self._latest_battery = msg.percentage
             self._latest_battery_current = msg.current
             self._latest_battery_status = msg.power_supply_status
+
+    def _odom_cb(self, msg: Odometry):
+        receive_time = time.monotonic()
+        twist = msg.twist.twist
+        linear_speed = math.hypot(twist.linear.x, twist.linear.y)
+        is_zero_speed = (
+            linear_speed <= self._odom_stationary_linear_speed_max
+            and abs(twist.angular.z) <= self._odom_stationary_angular_speed_max
+        )
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+        with self._lock:
+            self._latest_odom_stamp = stamp
+            self._latest_odom_receive_monotonic_time = receive_time
+            self._latest_odom_linear_x = twist.linear.x
+            self._latest_odom_linear_y = twist.linear.y
+            self._latest_odom_angular_z = twist.angular.z
+            if is_zero_speed:
+                if self._stationary_since_monotonic_time is None:
+                    self._stationary_since_monotonic_time = receive_time
+                    self._stationary_sample_count = 1
+                else:
+                    self._stationary_sample_count += 1
+            else:
+                self._stationary_since_monotonic_time = None
+                self._stationary_sample_count = 0
+
+    def is_stationary(self, robot_name: str):
+        """Return True only for fresh, continuously zero-speed odometry."""
+        now = time.monotonic()
+        with self._lock:
+            receive_time = self._latest_odom_receive_monotonic_time
+            stationary_since = self._stationary_since_monotonic_time
+            sample_count = self._stationary_sample_count
+
+        if receive_time is None or now - receive_time > self._odom_stale_timeout_sec:
+            return False
+        if stationary_since is None:
+            return False
+        return (
+            sample_count >= self._odom_stationary_min_samples
+            and now - stationary_since >= self._odom_stationary_min_duration_sec
+        )
 
     def _dock_status_cb(self, msg):
         now = time.monotonic()
