@@ -19,7 +19,7 @@ unset FASTRTPS_DEFAULT_PROFILES_FILE
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export AMENT_PYTHON_EXECUTABLE=/usr/bin/python3
 export ROS_DOMAIN_ID=0
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 
 source /opt/ros/humble/setup.bash
 
